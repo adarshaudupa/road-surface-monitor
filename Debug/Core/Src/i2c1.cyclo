@@ -1,0 +1,4 @@
+../Core/Src/i2c1.c:12:6:I2C1_Init	1
+../Core/Src/i2c1.c:49:9:I2C1_ReadRegister	8
+../Core/Src/i2c1.c:96:6:I2C1_ReadMulti	8
+../Core/Src/i2c1.c:141:6:I2C1_WriteByte	6

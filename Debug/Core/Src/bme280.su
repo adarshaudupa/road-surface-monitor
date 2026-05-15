@@ -1,0 +1,2 @@
+../Core/Src/bme280.c:16:9:BME280_CheckID	8	static
+../Core/Src/bme280.c:21:6:BME280_ReadRawTemp	16	static
