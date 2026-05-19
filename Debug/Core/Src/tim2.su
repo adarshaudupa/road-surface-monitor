@@ -1,5 +1,0 @@
-../Core/Src/tim2.c:16:6:timer_start	4	static
-../Core/Src/tim2.c:20:6:timer_stop	4	static
-../Core/Src/tim2.c:26:6:TIM2_Init	4	static
-../Core/Src/tim2.c:37:10:TIM2_GetMicros	4	static
-../Core/Src/tim2.c:42:6:delay_us	24	static
