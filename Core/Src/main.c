@@ -29,6 +29,7 @@
 #include "uart2.h"
 #include "hc-sr04.h"
 #include "i2c1.h"
+#include "lsm6ds3.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -67,7 +68,13 @@ static void MX_USART1_UART_Init(void); // USART1 initialization function
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+typedef enum {
+    STATE_ROAD_GOOD = 0,
+    STATE_POTHOLE_DETECTED,
+    STATE_BUMPY
+} road_state_t;
 
+road_state_t road_state = STATE_ROAD_GOOD;
 /* USER CODE END 0 */
 
 /**
@@ -97,9 +104,10 @@ int main(void)
   I2C1_Init(); // Initialize I2C1 for LSM6DS3
   UART2_Init(); // Initialize UART2
   TIM2_Init(); // Initialize TIM2 for timing for LSM6DS3
-  TIM3_init(); // Initialize TIM3 for timing for HC-SR04
+  TIM5_Init(); // Initialize TIM5 for timing for HC-SR04
   GPS_Init(&huart1); // Initialize GPS module with UART1
   HCSR04_Init(); // Initialize HC-SR04 ultrasonic sensors
+  LSM6DS3_Init(); // Initialize LSM6DS3 IMU
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -107,29 +115,17 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   UART2_SendString("=== POTHOLE DETECTION SYSTEM ===\r\n");
-  // LSM6DS3 config
-  I2C1_WriteByte(0x6A, 0x10, 0x40);  // Accel 104Hz
-  I2C1_WriteByte(0x6A, 0x11, 0x40);  // Gyro 104Hz
+  LSM6DS3_WHOAMI();// LSM6DS3 WHOAMI check to verify communication
 
-  uint8_t id = I2C1_ReadRegister(0x6A, 0x0F); // Read WHO_AM_I register
-  uart_print_uint("WHO_AM_I = ", id); // Should print 0x69 for LSM6DS3
-
-      // Calibrate accel_z baseline (10 samples)
-  UART2_SendString("Calibrating...\r\n"); // Print calibration message
-  accel_z_baseline = 0; // Reset baseline accumulator
-  for (int i = 0; i < 10; i++)
-  {
-  uint8_t low = I2C1_ReadRegister(0x6A, 0x2C); // Read low byte of Z-axis accel
-  uint8_t high = I2C1_ReadRegister(0x6A, 0x2D); // Read high byte of Z-axis accel
-  int16_t az = (int16_t)((high << 8) | low); // Combine bytes to form signed 16-bit value
-  accel_z_baseline += az; // Accumulate for averaging
-  HAL_Delay(10); // Short delay between samples
-  }
-  accel_z_baseline /= 10; // Average to get baseline
-  uart_print_int("Baseline Z = ", accel_z_baseline); // Print baseline value
+  accel_z_baseline = imu_calibrate_z_baseline(10); // Calibrate baseline Z-axis acceleration with 10 samples
 
       // Main loop
-      uint32_t last_hc_trigger = 0; // Timestamp of last HC-SR04 trigger
+  uint32_t last_sample_us = 0; // Timestamp of last IMU sample
+  uint32_t last_ultra_us    = 0; // Timestamp of last ultrasonic reading after pothole detection
+  const uint32_t SAMPLE_DT  = 10000;   // desired sampling interval for IMU (100 Hz)
+  const uint32_t ULTRA_DT   = 500000;  // desired interval between ultrasonic readings after pothole detection (500 ms)
+  float accel_z_filt = 0.0f;   // Filtered Z-axis acceleration for smoothing
+  const float alpha  = 0.2f;   // 0 < alpha < 1 for low-pass filter (0.2 gives good smoothing without too much lag)
 
   /* USER CODE END 2 */
 
@@ -141,29 +137,49 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  uint32_t now = TIM5_GetMicros(); // Get current time in microseconds
+	  if ((now - last_sample_us) >= SAMPLE_DT) // Check if it's time to take a new sample based on desired sampling interval (SAMPLE_DT)
+	  {
+	      // do accel_z_filt, z_diff, state machine as above
+	      last_sample_us = now; // Update last sample time to current time after processing
+	  }
+	  if (road_state == STATE_POTHOLE_DETECTED && (now - last_ultra_us) >= ULTRA_DT) // If we detected a pothole and it's time to take a new ultrasonic reading based on desired interval (ULTRA_DT)
+	  {
+	      uint16_t d_cm = HCSR04_ReadDistance_cm(); // Read distance from HC-SR04 in cm
+	      uart_print_uint("Distance_cm = ", d_cm); // Print distance reading to UART
+	      last_ultra_us = now; // Update last ultrasonic reading time
+	  }
 
 	          // Read accel every 10ms
-	          if ((now - last_hc_trigger) > 10000) // 10ms has passed since last HC-SR04 trigger
+	          if ((now - last_sample_us) > 10000) // If more than 10ms has passed since last sample
 	          {
-	              uint8_t low, high; // Variables to hold low and high bytes of accel data
-
 	              // Accel Z
-	              low = I2C1_ReadRegister(0x6A, 0x2C); // Read low byte of Z-axis acceleration
-	              high = I2C1_ReadRegister(0x6A, 0x2D); // Read high byte of Z-axis acceleration
-	              int16_t accel_z = (int16_t)((high << 8) | low); // Combine high and low bytes to form signed 16-bit value
+	        	  int16_t accel_z_raw = imu_read_accel_z(); // Combine high and low bytes to form signed 16-bit value
+	              accel_z_filt = accel_z_filt + alpha * ((float)accel_z - accel_z_filt); // Apply low-pass filter to raw accel_z for smoothing
+	              accel_z = (int16_t)accel_z_filt; // Use filtered value for pothole detection
+	              int16_t z_diff  = accel_z_baseline - accel_z; // Calculate difference from baseline
 
 	              // Pothole detection
 	              int16_t z_diff = accel_z_baseline - accel_z; // Calculate difference from baseline
 	              if (z_diff > POTHOLE_THRESHOLD) // If the drop exceeds the threshold, we have a pothole
 	              {
-	                  UART2_SendString("*** POTHOLE DETECTED ***\r\n"); // Print pothole detection message
+	            	  road_state = STATE_POTHOLE_DETECTED;
+	            	  UART2_SendString("*** POTHOLE DETECTED ***\r\n"); // Print pothole detection message
 	                  uart_print_int("Z_diff = ", z_diff); // Print the difference from baseline
 
 	                  // Trigger HC-SR04
 	                  HCSR04_ReadDistance_cm(); // Read distance from HC-SR04 and print it
 	              }
-
-	              last_hc_trigger = now; // Update last trigger time
+	              else if (z_diff > (POTHOLE_THRESHOLD / 2)) // If the drop is significant but not a pothole, we have a bumpy road
+	              {
+	            	  road_state = STATE_BUMPY;
+	            	  UART2_SendString("*** BUMPY ROAD DETECTED *** \r\n"); // Print bumpy road message
+	                  uart_print_int("Z_diff = ", z_diff); // Print the difference from baseline
+	              }
+	              else
+	              {
+	            	  road_state = STATE_ROAD_GOOD; // Road is good if difference is within acceptable range
+	              }
+	              last_sample_us = now; // Update last trigger time
 	          }
   }
   /* USER CODE END 3 */
