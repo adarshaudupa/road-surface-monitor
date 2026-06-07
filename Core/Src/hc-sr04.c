@@ -50,23 +50,26 @@ void HCSR04_Init(void)
 void HCSR04_Start(void)
 {
     if (hcsr04_busy)
-        return; // Previous measurement not complete
+        return;
 
     hcsr04_busy = 1;
     hcsr04_done = 0;
     hcsr04_last_cm = 0;
+
     echo_state = 0;
     echo_width = 0;
     echo_start = 0;
 
-    // Fire TRIG pulse, 10us
-    GPIOA->ODR |=  (1 << 6);
-    // Could move this to timer for zero blocking, but 10us is negligible here
-    for (volatile int i = 0; i < 200; i++) __NOP();  // ~10us at 16MHz
-    GPIOA->ODR &= ~(1 << 6);
+    // TRIG high
+    GPIOA->ODR |= (1U << 6);
 
-    // Arm timeout: store start timestamp (we'll check time in the ISR)
-    // Or set up a compare interrupt on TIM5 if you want a real HW timeout
+    // precise 10us pulse using TIM5 micros
+    uint32_t t = TIM5_GetMicros();
+    while ((uint32_t)(TIM5_GetMicros() - t) < 10U)
+        ;
+
+    // TRIG low
+    GPIOA->ODR &= ~(1U << 6);
 }
 
 /* --- Called from TIM5 IRQ on edge or from timeout logic --- */

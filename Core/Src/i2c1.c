@@ -37,7 +37,7 @@ void I2C1_Init(void)
  I2C1->CCR = 0;
  I2C1->TRISE = 0;
 
- uint32_t pclk = 84000000; // APB1 clock = 84 MHz (PLLCLK))
+ uint32_t pclk = 16000000; // APB1 clock = 16MHz (HSI))
  uint32_t pclk_mhz = pclk / 1000000;
  I2C1->CR2 = pclk_mhz;
  //CCR =(PClk/(2 or 3 * Target Frequency) 2 for standard mode(100KHz) and 3 for Fast mode(400Khz)
