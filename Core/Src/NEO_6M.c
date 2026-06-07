@@ -1,21 +1,19 @@
-/* ========================= Neo_6m.c ========================= */
-
 #include "NEO_6M.h"
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include "stm32f4xx.h"
 #include "uart1.h"
 #include "uart2.h"
+#include <string.h>
+#include <stdlib.h>
 
 static volatile uint8_t  rx_buffer[GPS_RX_BUFFER_SIZE];
 static volatile uint16_t rx_head = 0;
 static volatile uint16_t rx_tail = 0;
 
-static char     line_buffer[GPS_LINE_BUFFER_SIZE];
+static char line_buffer[GPS_LINE_BUFFER_SIZE];
 static uint16_t line_index = 0;
 
-static GPS_Data_t        gps_data;
-static volatile uint8_t  gps_data_updated  = 0;
+static GPS_Data_t gps_data;
+static volatile uint8_t  gps_data_updated = 0;
 static volatile uint32_t gps_overflow_count = 0;
 static volatile uint32_t gps_rx_byte_count = 0;
 
@@ -31,18 +29,17 @@ void USART1_IRQHandler(void)
 {
     uint32_t sr = USART1->SR;
 
-    // Handle errors (clear by SR read + DR read)
-    if (sr & ((1U<<3) /*ORE*/ | (1U<<2) /*NE*/ | (1U<<1) /*FE*/))
+    if (sr & ((1U << 3) | (1U << 2) | (1U << 1)))
     {
-        (void)USART1->DR; // discard to clear
-         gps_rx_byte_count++;// You may count errors here if you want
+        (void)USART1->DR;
     }
 
-    // RXNE: read available bytes (loop drains FIFO/shift)
-    while (USART1->SR & (1 << 5))   // RXNE set
+    while (USART1->SR & (1U << 5))
     {
-        uint8_t byte = (uint8_t)(USART1->DR & 0xFF);
-        uint16_t next_head = (rx_head + 1) % GPS_RX_BUFFER_SIZE;
+        uint8_t byte = (uint8_t)(USART1->DR & 0xFFU);
+        gps_rx_byte_count++;
+
+        uint16_t next_head = (uint16_t)((rx_head + 1U) % GPS_RX_BUFFER_SIZE);
         if (next_head != rx_tail)
         {
             rx_buffer[rx_head] = byte;
@@ -51,7 +48,6 @@ void USART1_IRQHandler(void)
         else
         {
             gps_overflow_count++;
-            // buffer full — byte dropped
         }
     }
 }
@@ -61,11 +57,10 @@ void GPS_Process(void)
     while (rx_tail != rx_head)
     {
         char c = (char)rx_buffer[rx_tail];
-        rx_tail = (rx_tail + 1) % GPS_RX_BUFFER_SIZE;
+        rx_tail = (uint16_t)((rx_tail + 1U) % GPS_RX_BUFFER_SIZE);
 
         if (c == '\n')
         {
-            // Strip trailing \r if present
             if (line_index > 0 && line_buffer[line_index - 1] == '\r')
                 line_index--;
 
@@ -78,21 +73,21 @@ void GPS_Process(void)
         }
         else
         {
-            if (line_index < (GPS_LINE_BUFFER_SIZE - 1))
+            if (line_index < (GPS_LINE_BUFFER_SIZE - 1U))
                 line_buffer[line_index++] = c;
             else
-                line_index = 0;   // line too long, discard
+                line_index = 0;
         }
     }
 }
 
 static void GPS_ParseLine(char *line)
 {
-    if (strncmp(line, "$GPGGA", 6) != 0)
+    if (strncmp(line, "$GPGGA", 6) != 0 && strncmp(line, "$GNGGA", 6) != 0)
         return;
 
-    char    *token;
-    uint8_t  field = 0;
+    char *token;
+    uint8_t field = 0;
 
     token = strtok(line, ",");
 
@@ -164,4 +159,7 @@ uint32_t GPS_GetOverflowCount(void)
     return gps_overflow_count;
 }
 
-uint32_t GPS_GetRxByteCount(void){	return gps_rx_byte_count;}
+uint32_t GPS_GetRxByteCount(void)
+{
+    return gps_rx_byte_count;
+}

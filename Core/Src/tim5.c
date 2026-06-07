@@ -17,6 +17,7 @@
 
 #include "stm32f4xx.h"
 #include "tim5.h"
+#include "hc-sr04.h"
 
 volatile uint8_t  edge_count  = 0;
 volatile uint32_t echo_start  = 0;
@@ -96,7 +97,8 @@ void TIM5_IRQHandler(void)
         echo_width  = (captured >= echo_start) ? (captured - echo_start) : (0xFFFFFFFF - echo_start + captured + 1); // wrap
         echo_state = 2;
         TIM5->CCER &= ~(1 << 1);  // CC1P = 0: back to rising edge
-        echo_count = 0; // optional: reset for next measurement
+        edge_count = 0; // optional: reset for next measurement
+        HCSR04_ISR_CaptureDone();
     }
     else	{
 		// Should not happen, but reset state if it does

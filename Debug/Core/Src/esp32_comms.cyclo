@@ -1,0 +1,3 @@
+../Core/Src/esp32_comms.c:26:13:u32_to_str	4
+../Core/Src/esp32_comms.c:43:13:i16_to_str	2
+../Core/Src/esp32_comms.c:62:6:ESP32_SendPacket	2

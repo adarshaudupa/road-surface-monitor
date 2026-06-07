@@ -6,7 +6,8 @@
 #include "i2c1.h"
 #include "lsm6ds3.h"
 #include "hc-sr04.h"
-#include "ESP32_comms.h"
+#include "esp32_comms.h"
+#include <string.h>
 
 #define SHOCK_DT_US         10000     // 100Hz sample
 #define SHOCK_THRESH        3000      // LSM6DS3 shock threshold for pothole

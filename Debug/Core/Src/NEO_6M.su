@@ -1,0 +1,9 @@
+../Core/Src/NEO_6M.c:22:6:GPS_Init	8	static
+../Core/Src/NEO_6M.c:28:6:USART1_IRQHandler	16	static
+../Core/Src/NEO_6M.c:55:6:GPS_Process	16	static
+../Core/Src/NEO_6M.c:84:13:GPS_ParseLine	24	static
+../Core/Src/NEO_6M.c:142:6:GPS_GetDataCopy	16	static
+../Core/Src/NEO_6M.c:147:9:GPS_IsDataUpdated	4	static
+../Core/Src/NEO_6M.c:152:6:GPS_ClearDataUpdatedFlag	4	static
+../Core/Src/NEO_6M.c:157:10:GPS_GetOverflowCount	4	static
+../Core/Src/NEO_6M.c:162:10:GPS_GetRxByteCount	4	static

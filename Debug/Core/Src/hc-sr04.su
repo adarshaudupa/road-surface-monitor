@@ -1,0 +1,6 @@
+../Core/Src/hc-sr04.c:24:6:HCSR04_Init	4	static
+../Core/Src/hc-sr04.c:50:6:HCSR04_Start	16	static,ignoring_inline_asm
+../Core/Src/hc-sr04.c:73:6:HCSR04_ISR_CaptureDone	4	static
+../Core/Src/hc-sr04.c:91:9:HCSR04_IsDone	4	static
+../Core/Src/hc-sr04.c:97:10:HCSR04_GetLastCm	4	static
+../Core/Src/hc-sr04.c:103:6:HCSR04_ClearDone	4	static

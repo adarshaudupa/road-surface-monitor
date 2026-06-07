@@ -1,0 +1,8 @@
+../Core/Src/lsm6ds3.c:54:6:LSM6DS3_Init	8	static
+../Core/Src/lsm6ds3.c:69:6:LSM6DS3_WHOAMI	16	static
+../Core/Src/lsm6ds3.c:80:6:imu_read_accel_xyz	32	static
+../Core/Src/lsm6ds3.c:97:9:imu_read_accel_z	16	static
+../Core/Src/lsm6ds3.c:110:6:imu_update_gravity_estimate	16	static
+../Core/Src/lsm6ds3.c:127:6:imu_settle_gravity	32	static
+../Core/Src/lsm6ds3.c:151:9:imu_get_vertical_dynamic_lsb	48	static
+../Core/Src/lsm6ds3.c:181:9:imu_vertical_shock	16	static

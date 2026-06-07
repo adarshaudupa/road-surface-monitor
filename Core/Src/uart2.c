@@ -6,7 +6,7 @@
 
 #include "uart2.h"
 #include "stm32f4xx.h"
-#include "clock.h"
+
 
 // Circular Buffer for RX
 

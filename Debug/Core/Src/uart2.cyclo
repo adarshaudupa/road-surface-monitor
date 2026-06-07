@@ -1,0 +1,8 @@
+../Core/Src/uart2.c:19:6:UART2_Init	3
+../Core/Src/uart2.c:47:6:UART2_SendChar	2
+../Core/Src/uart2.c:54:6:UART2_SendString	2
+../Core/Src/uart2.c:68:6:UART2_ReadChar	3
+../Core/Src/uart2.c:102:9:UART2_DataAvailable	1
+../Core/Src/uart2.c:106:6:USART2_IRQHandler	3
+../Core/Src/uart2.c:125:6:uart_print_uint	5
+../Core/Src/uart2.c:149:6:uart_print_int	6

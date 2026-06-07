@@ -8,13 +8,13 @@
 #ifndef INC_HC_SR04_H_
 #define INC_HC_SR04_H_
 
-volatile uint32_t echo_start;;
-volatile uint32_t echo_width;
-volatile uint8_t  edge_count;
+#include <stdint.h>
 
-void HCSR04_Init(void);
-static void delay_us_spin(uint32_t us);
-uint16_t HCSR04_ReadDistance_cm(uint32_t *t_echo_us);
-
+void     HCSR04_Init(void);
+void     HCSR04_Start(void);
+void     HCSR04_ISR_CaptureDone(void);
+uint8_t  HCSR04_IsDone(void);
+uint16_t HCSR04_GetLastCm(void);
+void     HCSR04_ClearDone(void);
 
 #endif /* INC_HC_SR04_H_ */

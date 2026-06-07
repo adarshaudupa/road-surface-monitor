@@ -17,7 +17,7 @@
  * dist_cm: 0 if ultrasonic not triggered
  */
 
-#include "esp_comms.h"
+#include "esp32_comms.h"
 #include "uart3.h"
 #include "tim5.h"
 
