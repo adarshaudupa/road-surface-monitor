@@ -15,10 +15,14 @@
 #include "stm32f4xx.h"
 #include "uart2.h"
 
+uint8_t dev_addr = 0x6B; // LSM6DS3 I2C address (SA0=0)
+
 void I2C1_Init(void)
 {
  RCC->AHB1ENR |= (1<<1); //Enable GPIOB Clock
  RCC->APB1ENR |= (1<<21); //Enable I2C1 Clock
+ RCC->APB1RSTR |= (1<<21); //Reset I2C1
+ RCC->APB1RSTR &= ~(1<<21); //Release reset
  GPIOB->MODER &= ~((3<<16) | (3<<18));
  GPIOB->MODER |= (2<<16) | (2<<18); //Setting PB8 and PB9 to AF
  GPIOB->OTYPER &= ~((1<<8) | (1<<9));
@@ -26,6 +30,7 @@ void I2C1_Init(void)
  GPIOB->OSPEEDR &= ~((3<<16) | (3<<18));
  GPIOB->OSPEEDR |= (3<<16) | (3<<18);
  GPIOB->PUPDR &= ~((3<<16) | (3<<18));
+ GPIOB->PUPDR |=  ((1<<16) | (1<<18));
 
  GPIOB->AFR[1] &= ~((0xF<<0) | (0xF<<4));
  GPIOB->AFR[1] |= (4<<0) | (4<<4); //PB8 and PB9 set to I2C AF(AF4)
@@ -54,116 +59,185 @@ void I2C1_Init(void)
 
 uint8_t I2C1_ReadRegister(uint8_t dev_addr, uint8_t reg_addr)
 {
-    //UART2_SendString("I2C: start\r\n");
+    uint32_t timeout;
 
-    // 1. START
-    I2C1->CR1 |= (1<<8); //START
-    while (!(I2C1->SR1 & (1<<0))); //START bit set
-    //UART2_SendString("I2C: SB\r\n");
+    I2C1->CR1 |= (1<<8);  // START
+    timeout = 100000;
+    while (!(I2C1->SR1 & (1<<0)))
+    {
+        if (--timeout == 0)
+        {
+            I2C1->CR1 |= (1<<9);  // STOP to release bus
+            UART2_SendString("I2C timeout: START\r\n");
+            return 0xFF;
+        }
+    }
 
-    // 2. Address + W
-    I2C1->DR = (dev_addr << 1) | 0x00; //addr + W
-    while (!(I2C1->SR1 & (1<<1))); //ADDR
-    (void)I2C1->SR2; // clear ADDR
-    //UART2_SendString("I2C: ADDR-W\r\n");
+    I2C1->DR = (dev_addr << 1) | 0x00;
+    timeout = 100000;
+    while (!(I2C1->SR1 & (1<<1)))
+    {
+        if (--timeout == 0)
+        {
+            I2C1->CR1 |= (1<<9);
+            UART2_SendString("I2C timeout: ADDR\r\n");
+            return 0xFF;
+        }
+    }
+    (void)I2C1->SR2;
 
-    // 3. Reg addr
     I2C1->DR = reg_addr;
-    while (!(I2C1->SR1 & (1<<7))); // Wait TXE=1 (reg addr sent)
-    while (!(I2C1->SR1 & (1<<2))); // Wait BTF=1 (reg addr sent and ready for next byte)
-    //UART2_SendString("I2C: reg sent\r\n");
+    timeout = 100000;
+    while (!(I2C1->SR1 & (1<<7)))
+    {
+        if (--timeout == 0)
+        {
+            I2C1->CR1 |= (1<<9);
+            UART2_SendString("I2C timeout: TXE\r\n");
+            return 0xFF;
+        }
+    }
+    timeout = 100000;
+    while (!(I2C1->SR1 & (1<<2)))
+    {
+        if (--timeout == 0)
+        {
+            I2C1->CR1 |= (1<<9);
+            UART2_SendString("I2C timeout: BTF\r\n");
+            return 0xFF;
+        }
+    }
 
-    // 4. Repeated START
-    I2C1->CR1 |= (1<<8); //REPEATED START
-    while (!(I2C1->SR1 & (1<<0))); //START bit set
-    //UART2_SendString("I2C: SB2\r\n");
+    I2C1->CR1 |= (1<<8);  // Repeated START
+    timeout = 100000;
+    while (!(I2C1->SR1 & (1<<0)))
+    {
+        if (--timeout == 0)
+        {
+            I2C1->CR1 |= (1<<9);
+            UART2_SendString("I2C timeout: RST\r\n");
+            return 0xFF;
+        }
+    }
 
-    // 5. Address + R
-    I2C1->DR = (dev_addr << 1) | 0x01; //addr + R
-    while (!(I2C1->SR1 & (1<<1))); //ADDR set
-    //UART2_SendString("I2C: ADDR-R\r\n");
+    I2C1->DR = (dev_addr << 1) | 0x01;
+    timeout = 100000;
+    while (!(I2C1->SR1 & (1<<1)))
+    {
+        if (--timeout == 0)
+        {
+            I2C1->CR1 |= (1<<9);
+            UART2_SendString("I2C timeout: ADDR-R\r\n");
+            return 0xFF;
+        }
+    }
 
-    I2C1->CR1 &= ~(1<<10);   // ACK = 0
+    I2C1->CR1 &= ~(1<<10);
     (void)I2C1->SR1;
-    (void)I2C1->SR2;         // clear ADDR
-    I2C1->CR1 |= (1<<9);      // STOP = 1
+    (void)I2C1->SR2;
+    I2C1->CR1 |= (1<<9);
 
-    while (!(I2C1->SR1 & (1<<6))); // Wait RXNE=1 (data received)
-    //UART2_SendString("I2C: RXNE\r\n");
+    timeout = 100000;
+    while (!(I2C1->SR1 & (1<<6)))
+    {
+        if (--timeout == 0)
+        {
+            UART2_SendString("I2C timeout: RXNE\r\n");
+            return 0xFF;
+        }
+    }
+
     uint8_t data = I2C1->DR;
-    I2C1->CR1 |= (1<<10); //re-enable ACK for next reads
-
-    //UART2_SendString("I2C: done\r\n");
+    I2C1->CR1 |= (1<<10);
     return data;
 }
 
 
-
-void I2C1_ReadMulti(uint8_t saddr, uint8_t maddr, uint8_t *data, uint8_t len)
+// Replace your existing I2C1_ReadMulti with this version:
+void I2C1_ReadMulti(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, uint8_t count)
 {
-    //UART2_SendString("RM: enter\r\n");
+    uint32_t timeout = 500000;
 
-    // 1. Wait until bus not busy
-    // while (I2C1->SR2 & I2C_SR2_BUSY);
+    // 1. START
+    I2C1->CR1 |= (1 << 8);
+    timeout = 500000;
+    while (!(I2C1->SR1 & (1 << 0))) { if (--timeout == 0) { UART2_SendString("I2C ERR: START\r\n"); return; } }
 
-    // 2. Generate START
-    I2C1->CR1 |= I2C_CR1_START;
-    while (!(I2C1->SR1 & I2C_SR1_SB));
-    //UART2_SendString("RM: SB set\r\n");
+    // 2. ADDR (Write)
+    I2C1->DR = (dev_addr << 1);
+    timeout = 500000;
+    while (!(I2C1->SR1 & (1 << 1))) { if (--timeout == 0) { UART2_SendString("I2C ERR: ADDR\r\n"); return; } }
+    (void)I2C1->SR1; (void)I2C1->SR2;
 
-    // 3. Send slave address (WRITE)
-    I2C1->DR = saddr << 1;
-    while (!(I2C1->SR1 & I2C_SR1_ADDR));
-   // UART2_SendString("RM: ADDR write\r\n");
-    (void)I2C1->SR2;
+    // 3. REG
+    I2C1->DR = reg_addr;
+    timeout = 500000;
+    while (!(I2C1->SR1 & (1 << 7))) { if (--timeout == 0) return; }
 
-    // 4. Send register address
-    while (!(I2C1->SR1 & I2C_SR1_TXE));
-    I2C1->DR = maddr;
-    while (!(I2C1->SR1 & I2C_SR1_TXE));
-    //UART2_SendString("RM: reg sent\r\n");
+    // 4. RESTART
+    I2C1->CR1 |= (1 << 8);
+    timeout = 500000;
+    while (!(I2C1->SR1 & (1 << 0))) { if (--timeout == 0) return; }
 
-    // 5. Repeated START
-    I2C1->CR1 |= I2C_CR1_START;
-    while (!(I2C1->SR1 & I2C_SR1_SB));
-    //UART2_SendString("RM: SB2 set\r\n");
+    // 5. ADDR (Read)
+    I2C1->DR = (dev_addr << 1) | 1;
+    timeout = 500000;
+    while (!(I2C1->SR1 & (1 << 1))) { if (--timeout == 0) return; }
+    (void)I2C1->SR1; (void)I2C1->SR2;
 
-    // 6. Send slave address (READ)
-    I2C1->DR = (saddr << 1) | 0x01;
-    while (!(I2C1->SR1 & I2C_SR1_ADDR));
-   // UART2_SendString("RM: ADDR read\r\n");
-    (void)I2C1->SR2;
+    I2C1->CR1 |= (1 << 10);
 
-    // 7. One-byte debug read
-    I2C1->CR1 &= ~I2C_CR1_ACK;
-    I2C1->CR1 |= I2C_CR1_STOP;
-    while (!(I2C1->SR1 & I2C_SR1_RXNE));
-    data[0] = I2C1->DR;
-    I2C1->CR1 |= I2C_CR1_ACK;
-
-    //UART2_SendString("RM: exit\r\n");
+    for (uint8_t i = 0; i < count; i++)
+    {
+        if (i == (count - 1)) { I2C1->CR1 &= ~(1 << 10); I2C1->CR1 |= (1 << 9); }
+        timeout = 500000;
+        while (!(I2C1->SR1 & (1 << 6))) { if (--timeout == 0) return; }
+        data[i] = I2C1->DR;
+    }
 }
 
 void I2C1_WriteByte(uint8_t dev_addr, uint8_t reg_addr, uint8_t value)
 {
-    // 1. START condition
-    I2C1->CR1 |= (1 << 8);                      // START
-    while (!(I2C1->SR1 & (1 << 0)));           // Wait SB=1
+    uint32_t timeout;
 
-    // 2. Send slave address + WRITE (W = 0)
+    // START
+    I2C1->CR1 |= (1 << 8);
+    timeout = 100000;
+    while (!(I2C1->SR1 & (1 << 0)))
+    {
+        if (--timeout == 0) { UART2_SendString("I2C WR: START timeout\r\n"); return; }
+    }
+
+    // Address + W
     I2C1->DR = (dev_addr << 1) | 0x00;
-    while (!(I2C1->SR1 & (1 << 1)));           // Wait ADDR=1
-    (void)I2C1->SR2;                           // Clear ADDR
+    timeout = 100000;
+    while (!(I2C1->SR1 & (1 << 1)))
+    {
+        if (--timeout == 0) { I2C1->CR1 |= (1<<9); UART2_SendString("I2C WR: ADDR timeout\r\n"); return; }
+    }
+    (void)I2C1->SR2;
 
-    // 3. Send register address
-    while (!(I2C1->SR1 & (1 << 7)));           // Wait TXE=1
+    // Register address
+    timeout = 100000;
+    while (!(I2C1->SR1 & (1 << 7)))
+    {
+        if (--timeout == 0) { I2C1->CR1 |= (1<<9); UART2_SendString("I2C WR: TXE timeout\r\n"); return; }
+    }
     I2C1->DR = reg_addr;
-    while (!(I2C1->SR1 & (1 << 2)));           // Wait BTF=1 (reg addr sent)
+    timeout = 100000;
+    while (!(I2C1->SR1 & (1 << 2)))
+    {
+        if (--timeout == 0) { I2C1->CR1 |= (1<<9); UART2_SendString("I2C WR: BTF1 timeout\r\n"); return; }
+    }
 
-    // 4. Send data byte
+    // Data
     I2C1->DR = value;
-    while (!(I2C1->SR1 & (1 << 2)));           // Wait BTF=1 (data sent)
+    timeout = 100000;
+    while (!(I2C1->SR1 & (1 << 2)))
+    {
+        if (--timeout == 0) { I2C1->CR1 |= (1<<9); UART2_SendString("I2C WR: BTF2 timeout\r\n"); return; }
+    }
 
-    // 5. STOP condition
-    I2C1->CR1 |= (1 << 9);                     // STOP
+    // STOP
+    I2C1->CR1 |= (1 << 9);
 }

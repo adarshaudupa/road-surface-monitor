@@ -79,18 +79,15 @@ void LSM6DS3_WHOAMI(void)
 // Read 3-axis accel using 6 consecutive registers
 void imu_read_accel_xyz(int16_t *ax, int16_t *ay, int16_t *az)
 {
-    // Note: Ideally you'd use auto-increment multi-byte I2C read.
-    // With only I2C1_ReadRegister available, we do 6 single reads.
-    uint8_t x_l = I2C1_ReadRegister(LSM6DS3_ADDR, OUTX_L_XL + 0);
-    uint8_t x_h = I2C1_ReadRegister(LSM6DS3_ADDR, OUTX_L_XL + 1);
-    uint8_t y_l = I2C1_ReadRegister(LSM6DS3_ADDR, OUTX_L_XL + 2);
-    uint8_t y_h = I2C1_ReadRegister(LSM6DS3_ADDR, OUTX_L_XL + 3);
-    uint8_t z_l = I2C1_ReadRegister(LSM6DS3_ADDR, OUTX_L_XL + 4);
-    uint8_t z_h = I2C1_ReadRegister(LSM6DS3_ADDR, OUTX_L_XL + 5);
+    uint8_t buffer[6];
 
-    *ax = (int16_t)((x_h << 8) | x_l);
-    *ay = (int16_t)((y_h << 8) | y_l);
-    *az = (int16_t)((z_h << 8) | z_l);
+    // Read 6 consecutive bytes starting from OUTX_L_XL (0x28)
+    I2C1_ReadMulti(LSM6DS3_ADDR, OUTX_L_XL, buffer, 6);
+
+    // Reconstruct the 16-bit values from the low and high bytes
+    *ax = (int16_t)((buffer[1] << 8) | buffer[0]);
+    *ay = (int16_t)((buffer[3] << 8) | buffer[2]);
+    *az = (int16_t)((buffer[5] << 8) | buffer[4]);
 }
 
 // Backwards-compatible helper (if other code calls it)
