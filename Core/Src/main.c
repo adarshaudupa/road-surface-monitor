@@ -39,7 +39,7 @@ int main(void)
     HCSR04_Init();
     LSM6DS3_Init();
 
-    UART2_SendString("==== POTHOLE DETECTION SYSTEM (INT-DRIVEN) ====\r\n");
+    UART2_SendString("==== POTHOLE DETECTION SYSTEM ====\r\n");
     LSM6DS3_WHOAMI();
     imu_settle_gravity(200, 5); // 1s at 5ms/sample
 
